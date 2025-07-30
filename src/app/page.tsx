@@ -1,103 +1,282 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { useRouter } from "next/navigation";
+import DashboardLayout from "@/components/dashboard-layout";
+import { motion } from "framer-motion";
+import {
+  Cloud,
+  Server,
+  Database,
+  Code,
+  Shield,
+  CreditCard,
+  Activity,
+  MessageSquare,
+  Key,
+  Table,
+  Plus,
+  Settings,
+} from "lucide-react";
+import Link from "next/link";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+const services = [
+  {
+    id: "compute",
+    name: "Compute",
+    description: "Virtual machines and containers",
+    icon: Server,
+    href: "/compute",
+    color: "bg-blue-500",
+  },
+  {
+    id: "storage",
+    name: "Storage",
+    description: "Object and block storage",
+    icon: Database,
+    href: "/storage",
+    color: "bg-green-500",
+  },
+  {
+    id: "lambda",
+    name: "Lambda",
+    description: "Serverless functions",
+    icon: Code,
+    href: "/lambda",
+    color: "bg-purple-500",
+  },
+  {
+    id: "database",
+    name: "Database",
+    description: "Managed SQL databases",
+    icon: Table,
+    href: "/database",
+    color: "bg-orange-500",
+  },
+  {
+    id: "queue",
+    name: "Queue",
+    description: "Message queuing service",
+    icon: MessageSquare,
+    href: "/queue",
+    color: "bg-pink-500",
+  },
+  {
+    id: "secrets",
+    name: "Secrets",
+    description: "Secure secret management",
+    icon: Key,
+    href: "/secrets",
+    color: "bg-red-500",
+  },
+  {
+    id: "nosql",
+    name: "NoSQL",
+    description: "Managed NoSQL databases",
+    icon: Database,
+    href: "/nosql",
+    color: "bg-indigo-500",
+  },
+  {
+    id: "iam",
+    name: "IAM",
+    description: "Identity & access management",
+    icon: Shield,
+    href: "/iam",
+    color: "bg-yellow-500",
+  },
+  {
+    id: "monitoring",
+    name: "Monitoring",
+    description: "Application monitoring",
+    icon: Activity,
+    href: "/monitoring",
+    color: "bg-teal-500",
+  },
+  {
+    id: "billing",
+    name: "Billing",
+    description: "Billing and usage",
+    icon: CreditCard,
+    href: "/billing",
+    color: "bg-cyan-500",
+  },
+];
+
+export default function HomePage() {
+  const { user, userProfile, company, companies, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        router.push("/login");
+      } else if (userProfile && (!companies || companies.length === 0)) {
+        router.push("/setup");
+      } else if (companies && companies.length > 0 && !company) {
+        router.push("/select-company");
+      }
+    }
+  }, [user, userProfile, company, companies, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (
+    !user ||
+    !userProfile ||
+    !companies ||
+    companies.length === 0 ||
+    !company
+  ) {
+    return null; // Will redirect
+  }
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <DashboardLayout>
+      <div className="space-y-8">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {userProfile.displayName}
+          </h1>
+          <p className="text-gray-600">
+            Managing <span className="font-semibold">{company.name}</span>
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Active Services</CardDescription>
+              <CardTitle className="text-3xl">12</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Monthly Cost</CardDescription>
+              <CardTitle className="text-3xl text-green-600">$42.60</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Active Resources</CardDescription>
+              <CardTitle className="text-3xl">87</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>System Health</CardDescription>
+              <CardTitle className="text-3xl text-green-600">98.9%</CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+
+        {/* Services Grid */}
+        <div>
+          <h2 className="text-2xl font-bold mb-6">Services</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {services.map((service, index) => (
+              <motion.div
+                key={service.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+              >
+                <Link href={service.href}>
+                  <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer h-full">
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${service.color}`}>
+                          <service.icon className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">
+                            {service.name}
+                          </CardTitle>
+                          <CardDescription className="text-sm">
+                            {service.description}
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </Card>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div>
+          <h2 className="text-2xl font-bold mb-6">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Create Resource
+                </CardTitle>
+                <CardDescription>
+                  Quickly create a new cloud resource
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full">Create New</Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Company Settings
+                </CardTitle>
+                <CardDescription>
+                  Manage your company configuration
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" className="w-full">
+                  Open Settings
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  View Analytics
+                </CardTitle>
+                <CardDescription>
+                  Monitor your usage and performance
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" className="w-full">
+                  View Dashboard
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }

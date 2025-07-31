@@ -132,7 +132,10 @@ export default function SecretsPage() {
 
     try {
       setCreatingSecret(true);
-      await apiService.createSecret(currentService.service_id, newSecretName.trim(), newSecretValue.trim());
+      await apiService.createSecret(currentService.service_id, {
+        name: newSecretName.trim(),
+        value: newSecretValue.trim()
+      });
       
       toast({
         title: "Success",

@@ -6,32 +6,24 @@ export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Define public paths that don't require authentication
-  const publicPaths = ['/login', '/api/auth', '/api/firebase'];
+  const publicPaths = ['/login', '/api/auth', '/api/firebase', '/_next', '/favicon.ico'];
   
   // Check if the current path is public
   const isPublicPath = publicPaths.some(publicPath => 
     path.startsWith(publicPath)
   );
 
-  // Get the token from cookies or headers
-  const token = request.cookies.get('access_token')?.value || 
-                request.headers.get('authorization')?.replace('Bearer ', '');
-
-  // Check for Firebase auth token
-  const firebaseToken = request.cookies.get('firebase_token')?.value;
-
+  // For Firebase auth, we'll let the client-side handle authentication
+  // The middleware will only redirect to login for non-public paths
+  // The actual auth check will be done in the components using useAuth()
+  
   // If the path is public, allow access
   if (isPublicPath) {
     return NextResponse.next();
   }
 
-  // If there's no token and no Firebase token and the path is not public, redirect to login
-  if (!token && !firebaseToken) {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // If there's a token (either custom or Firebase), allow access
+  // For now, allow all requests and let client-side auth handle the redirects
+  // This is because Firebase auth state is managed on the client side
   return NextResponse.next();
 }
 

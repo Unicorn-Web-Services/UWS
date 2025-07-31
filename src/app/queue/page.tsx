@@ -134,9 +134,9 @@ export default function QueuePage() {
 
     try {
       setAddingMessage(true);
-      await apiService.addQueueMessage(
+      await apiService.sendQueueMessage(
         currentService.service_id,
-        newMessage.trim()
+        { message: newMessage.trim() }
       );
 
       toast({
@@ -163,15 +163,22 @@ export default function QueuePage() {
 
     try {
       setReadingMessages(true);
-      const response = await apiService.readQueueMessages(
-        currentService.service_id,
-        messageLimit
+      const response = await apiService.listQueueMessages(
+        currentService.service_id
       );
-      setMessages(response.messages);
+      
+      // Transform the response to match the expected format
+      const transformedMessages = response.messages.map(msg => ({
+        id: msg.id,
+        message: msg.message, // The queue service returns 'message' field, not 'data'
+        timestamp: msg.timestamp
+      }));
+      
+      setMessages(transformedMessages);
 
       toast({
         title: "Success",
-        description: `Read ${response.messages.length} messages from queue`,
+        description: `Read ${transformedMessages.length} messages from queue`,
         variant: "success",
       });
     } catch (error) {

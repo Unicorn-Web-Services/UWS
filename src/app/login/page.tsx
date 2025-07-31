@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { signIn } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -26,25 +26,17 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const success = await login(username, password);
-      if (success) {
-        toast({
-          title: "Success",
-          description: "Login successful!",
-          variant: "success",
-        });
-        router.push("/");
-      } else {
-        toast({
-          title: "Error",
-          description: "Invalid username or password",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
+      await signIn(username, password);
+      toast({
+        title: "Success",
+        description: "Login successful!",
+        variant: "success",
+      });
+      // The auth context will handle the redirect automatically
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Login failed. Please try again.",
+        description: error.message || "Login failed. Please try again.",
         variant: "destructive",
       });
     } finally {

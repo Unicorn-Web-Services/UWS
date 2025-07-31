@@ -1176,6 +1176,174 @@ class ApiService {
     }>(`${this.orchestratorUrl}/secrets-services/${serviceId}/health`);
   }
 
+  // Secrets operations
+  async createSecret(serviceId: string, secretData: { name: string; value: string }): Promise<{
+    service_id: string;
+    secret_name: string;
+    created: boolean;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      secret_name: string;
+      created: boolean;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/secrets-services/${serviceId}/secrets`, {
+      method: "POST",
+      body: JSON.stringify(secretData),
+    });
+  }
+
+  async getSecret(serviceId: string, secretName: string): Promise<{
+    service_id: string;
+    secret: {
+      name: string;
+      value: string;
+      created_at: string;
+      updated_at: string;
+    } | null;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      secret: {
+        name: string;
+        value: string;
+        created_at: string;
+        updated_at: string;
+      } | null;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/secrets-services/${serviceId}/secrets/${secretName}`);
+  }
+
+  async listSecrets(serviceId: string): Promise<{
+    service_id: string;
+    secrets: Array<{
+      name: string;
+      created_at: string;
+      updated_at: string;
+    }>;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      secrets: Array<{
+        name: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/secrets-services/${serviceId}/secrets`);
+  }
+
+  async deleteSecret(serviceId: string, secretName: string): Promise<{
+    service_id: string;
+    secret_name: string;
+    deleted: boolean;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      secret_name: string;
+      deleted: boolean;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/secrets-services/${serviceId}/secrets/${secretName}`, {
+      method: "DELETE",
+    });
+  }
+
+  async removeSecretsService(serviceId: string): Promise<{ message: string }> {
+    return this.apiRequest<{ message: string }>(
+      `${this.orchestratorUrl}/secrets-services/${serviceId}`,
+      {
+        method: "DELETE",
+      }
+    );
+  }
+
+  // Queue operations
+  async sendQueueMessage(serviceId: string, message: any): Promise<{
+    service_id: string;
+    message_id: string;
+    sent: boolean;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      message_id: string;
+      sent: boolean;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/queue-services/${serviceId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(message),
+    });
+  }
+
+  async receiveQueueMessage(serviceId: string): Promise<{
+    service_id: string;
+    message: {
+      id: string;
+      data: any;
+      timestamp: string;
+    } | null;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      message: {
+        id: string;
+        data: any;
+        timestamp: string;
+      } | null;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/queue-services/${serviceId}/messages`);
+  }
+
+  async listQueueMessages(serviceId: string): Promise<{
+    service_id: string;
+    messages: Array<{
+      id: string;
+      message: string;
+      timestamp: string;
+    }>;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      messages: Array<{
+        id: string;
+        message: string;
+        timestamp: string;
+      }>;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/queue-services/${serviceId}/messages`);
+  }
+
+  async deleteQueueMessage(serviceId: string, messageId: string): Promise<{
+    service_id: string;
+    message_id: string;
+    deleted: boolean;
+    timestamp: string;
+  }> {
+    return this.apiRequest<{
+      service_id: string;
+      message_id: string;
+      deleted: boolean;
+      timestamp: string;
+    }>(`${this.orchestratorUrl}/queue-services/${serviceId}/messages/${messageId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async removeQueueService(serviceId: string): Promise<{ message: string }> {
+    return this.apiRequest<{ message: string }>(
+      `${this.orchestratorUrl}/queue-services/${serviceId}`,
+      {
+        method: "DELETE",
+      }
+    );
+  }
+
   async getTemplates(): Promise<{
     templates: Record<string, any>;
     available: string[];

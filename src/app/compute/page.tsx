@@ -135,10 +135,14 @@ export default function ComputePage() {
   };
 
   const handleDeleteContainer = async (containerId: string) => {
-    if (!confirm("Are you sure you want to delete this container? This action cannot be undone.")) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this container? This action cannot be undone."
+      )
+    ) {
       return;
     }
-    
+
     try {
       await deleteContainer(containerId);
       toast({
@@ -157,7 +161,7 @@ export default function ComputePage() {
   };
 
   const handlePresetSelect = (presetConfig: Partial<ContainerConfig>) => {
-    setConfig(prev => ({
+    setConfig((prev) => ({
       ...prev,
       ...presetConfig,
     }));
@@ -469,7 +473,10 @@ export default function ComputePage() {
                         placeholder="512m, 1g"
                         value={config.memory}
                         onChange={(e) =>
-                          setConfig((prev) => ({ ...prev, memory: e.target.value }))
+                          setConfig((prev) => ({
+                            ...prev,
+                            memory: e.target.value,
+                          }))
                         }
                       />
                     </div>
@@ -608,13 +615,15 @@ export default function ComputePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <Card className="cursor-pointer hover:shadow-lg transition-all">
+              <Card className="cursor-pointer hover:shadow-lg transition-all bg-[#bababa]">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {getStatusIcon(container.status)}
                       <CardTitle className="text-lg">
-                        {container.name || container.container_id || "Unknown Container"}
+                        {container.name ||
+                          container.container_id ||
+                          "Unknown Container"}
                       </CardTitle>
                     </div>
                     <div className="flex gap-1">
@@ -652,7 +661,9 @@ export default function ComputePage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDeleteContainer(container.container_id)}
+                        onClick={() =>
+                          handleDeleteContainer(container.container_id)
+                        }
                         title="Delete Container"
                         className="text-red-500 hover:text-red-700 hover:bg-red-50"
                       >
@@ -660,13 +671,21 @@ export default function ComputePage() {
                       </Button>
                     </div>
                   </div>
-                  <CardDescription>{container.image || "No image specified"}</CardDescription>
+                  <CardDescription>
+                    {container.image || "No image specified"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Status:</span>
-                      <Badge variant={container.status === "running" ? "default" : "secondary"}>
+                      <Badge
+                        variant={
+                          container.status === "running"
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
                         {container.status}
                       </Badge>
                     </div>
@@ -681,7 +700,9 @@ export default function ComputePage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Node:</span>
                       <span className="font-mono text-xs">
-                        {container.node_id ? container.node_id.substring(0, 8) + "..." : "N/A"}
+                        {container.node_id
+                          ? container.node_id.substring(0, 8) + "..."
+                          : "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -713,9 +734,14 @@ export default function ComputePage() {
             className="w-full max-w-6xl max-h-[90vh] overflow-hidden"
           >
             <CleanTerminal
-              nodeId={containers.find(c => c.container_id === showTerminal)?.node_id || "unknown"}
+              nodeId={
+                containers.find((c) => c.container_id === showTerminal)
+                  ?.node_id || "unknown"
+              }
               containerId={showTerminal}
-              containerName={containers.find(c => c.container_id === showTerminal)?.name}
+              containerName={
+                containers.find((c) => c.container_id === showTerminal)?.name
+              }
               onClose={() => setShowTerminal(null)}
             />
           </motion.div>

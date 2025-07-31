@@ -96,19 +96,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUser(user);
-        await loadUserProfile(user.uid);
-      } else {
-        setUser(null);
-        setUserProfile(null);
-        setCompany(null);
-      }
-      setLoading(false);
-    });
+    // For development, create a mock user if Firebase is not configured
+    const checkAuth = async () => {
+      try {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+          if (user) {
+            setUser(user);
+            await loadUserProfile(user.uid);
+          } else {
+            // For development, create a mock user if no Firebase user
+            if (process.env.NODE_ENV === 'development') {
+              const mockUser = {
+                uid: 'demo-user-id',
+                email: 'demo@example.com',
+                displayName: 'Demo User',
+              } as User;
+              setUser(mockUser);
+              
+              // Create mock user profile
+              const mockProfile: UserProfile = {
+                uid: 'demo-user-id',
+                email: 'demo@example.com',
+                displayName: 'Demo User',
+                role: 'owner',
+                permissions: ['*'],
+                createdAt: new Date(),
+                lastLogin: new Date(),
+              };
+              setUserProfile(mockProfile);
+              
+              // Create mock company
+              const mockCompany: Company = {
+                id: 'demo-company',
+                name: 'Demo Company',
+                slug: 'demo-company',
+                plan: 'free',
+                createdAt: new Date(),
+                ownerId: 'demo-user-id',
+                members: ['demo-user-id'],
+                settings: {
+                  maxUsers: 5,
+                  features: ['compute', 'storage', 'monitoring'],
+                },
+                billing: {
+                  usage: {
+                    compute: 0,
+                    storage: 0,
+                    requests: 0,
+                  },
+                },
+              };
+              setCompany(mockCompany);
+              setCompanies([mockCompany]);
+            } else {
+              setUser(null);
+              setUserProfile(null);
+              setCompany(null);
+            }
+          }
+          setLoading(false);
+        });
 
-    return unsubscribe;
+        return unsubscribe;
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const loadUserProfile = async (uid: string) => {
@@ -145,6 +201,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // For development, allow demo credentials
+      if (process.env.NODE_ENV === 'development' && 
+          (email === 'admin' || email === 'demo@example.com') && 
+          password === 'admin123') {
+        // Create mock user for demo
+        const mockUser = {
+          uid: 'demo-user-id',
+          email: 'demo@example.com',
+          displayName: 'Demo User',
+        } as User;
+        setUser(mockUser);
+        
+        // Create mock user profile
+        const mockProfile: UserProfile = {
+          uid: 'demo-user-id',
+          email: 'demo@example.com',
+          displayName: 'Demo User',
+          role: 'owner',
+          permissions: ['*'],
+          createdAt: new Date(),
+          lastLogin: new Date(),
+        };
+        setUserProfile(mockProfile);
+        
+        // Create mock company
+        const mockCompany: Company = {
+          id: 'demo-company',
+          name: 'Demo Company',
+          slug: 'demo-company',
+          plan: 'free',
+          createdAt: new Date(),
+          ownerId: 'demo-user-id',
+          members: ['demo-user-id'],
+          settings: {
+            maxUsers: 5,
+            features: ['compute', 'storage', 'monitoring'],
+          },
+          billing: {
+            usage: {
+              compute: 0,
+              storage: 0,
+              requests: 0,
+            },
+          },
+        };
+        setCompany(mockCompany);
+        setCompanies([mockCompany]);
+        return;
+      }
+      
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       throw new Error(error.message);

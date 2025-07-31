@@ -120,7 +120,11 @@ export default function CleanTerminal({
   }, [isConnected]);
 
   return (
-    <Card className={`${isFullscreen ? 'fixed inset-4 z-50' : 'w-full'} transition-all duration-200`}>
+    <Card
+      className={`${
+        isFullscreen ? "fixed inset-4 z-50" : "w-full"
+      } transition-all duration-200 bg-[#ffffff]`}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -138,7 +142,11 @@ export default function CleanTerminal({
               onClick={toggleFullscreen}
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
             </Button>
             <Button
               variant="outline"
@@ -180,7 +188,7 @@ export default function CleanTerminal({
               </div>
             )}
           </div>
-          
+
           {/* Command Input */}
           <form onSubmit={sendCommand} className="border-t border-gray-700">
             <div className="flex items-center p-2">
@@ -190,15 +198,19 @@ export default function CleanTerminal({
                 type="text"
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                placeholder={isConnected ? "Enter command..." : "Terminal disconnected"}
+                placeholder={
+                  isConnected ? "Enter command..." : "Terminal disconnected"
+                }
                 disabled={!isConnected}
                 className="flex-1 bg-transparent text-green-400 outline-none placeholder-gray-500"
-                style={{ fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace' }}
+                style={{
+                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                }}
               />
             </div>
           </form>
         </div>
-        
+
         {/* Connection Controls */}
         <div className="p-3 bg-gray-50 border-t">
           <div className="flex items-center gap-2">
@@ -221,4 +233,4 @@ export default function CleanTerminal({
       </CardContent>
     </Card>
   );
-} 
+}

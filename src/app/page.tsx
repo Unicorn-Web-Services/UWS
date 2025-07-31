@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/dashboard-layout";
@@ -18,6 +18,7 @@ import {
   Table,
   Plus,
   Settings,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -28,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { apiService } from "@/lib/api";
 
 const services = [
   {
@@ -108,6 +110,15 @@ const services = [
 export default function HomePage() {
   const { user, userProfile, company, companies, loading } = useAuth();
   const router = useRouter();
+  
+  // Dashboard stats state
+  const [dashboardStats, setDashboardStats] = useState({
+    activeServices: 0,
+    monthlyCost: 0,
+    activeResources: 0,
+    systemHealth: 0,
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (!loading) {
@@ -117,9 +128,100 @@ export default function HomePage() {
         router.push("/setup");
       } else if (companies && companies.length > 0 && !company) {
         router.push("/select-company");
+      } else if (user && company) {
+        // Load dashboard stats when user and company are available
+        loadDashboardStats();
       }
     }
   }, [user, userProfile, company, companies, loading, router]);
+
+  const loadDashboardStats = async () => {
+    if (!user) return;
+    
+    try {
+      setStatsLoading(true);
+      
+      // Fetch all service types in parallel
+      const [
+        containers,
+        bucketServices,
+        dbServices,
+        nosqlServices,
+        queueServices,
+        secretsServices,
+      ] = await Promise.all([
+        apiService.getContainers(user.uid).catch(() => ({ containers: [] })),
+        apiService.getBucketServices().catch(() => ({ bucket_services: [] })),
+        apiService.getDBServices().catch(() => ({ db_services: [] })),
+        apiService.getNoSQLServices().catch(() => ({ nosql_services: [] })),
+        apiService.getQueueServices().catch(() => ({ queue_services: [] })),
+        apiService.getSecretsServices().catch(() => ({ secrets_services: [] })),
+      ]);
+
+      // Calculate active services count
+      const allServices = [
+        ...(Array.isArray(containers) ? containers : []),
+        ...(bucketServices?.bucket_services || []),
+        ...(dbServices?.db_services || []),
+        ...(nosqlServices?.nosql_services || []),
+        ...(queueServices?.queue_services || []),
+        ...(secretsServices?.secrets_services || []),
+      ];
+
+      const activeServices = allServices.filter(service => {
+        // Check if service has is_healthy property (service types)
+        if ('is_healthy' in service) {
+          return service.is_healthy;
+        }
+        // Check if service has status property (containers)
+        if ('status' in service) {
+          return service.status === 'running';
+        }
+        return false;
+      }).length;
+
+      // Calculate system health percentage
+      const healthyServices = allServices.filter(service => {
+        // Check if service has is_healthy property (service types)
+        if ('is_healthy' in service) {
+          return service.is_healthy;
+        }
+        // Check if service has status property (containers)
+        if ('status' in service) {
+          return service.status === 'running';
+        }
+        return false;
+      }).length;
+      const systemHealth = allServices.length > 0 
+        ? Math.round((healthyServices / allServices.length) * 100) 
+        : 100;
+
+      // Calculate active resources (containers + services)
+      const activeResources = allServices.length;
+
+      // For now, use a simple cost calculation based on active services
+      // In a real implementation, this would come from billing API
+      const monthlyCost = activeServices * 3.55; // $3.55 per service as example
+
+      setDashboardStats({
+        activeServices,
+        monthlyCost,
+        activeResources,
+        systemHealth,
+      });
+    } catch (error) {
+      console.error("Error loading dashboard stats:", error);
+      // Set fallback values
+      setDashboardStats({
+        activeServices: 0,
+        monthlyCost: 0,
+        activeResources: 0,
+        systemHealth: 100,
+      });
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -156,26 +258,47 @@ export default function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Active Services</CardDescription>
-              <CardTitle className="text-3xl">12</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardDescription>Active Services</CardDescription>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadDashboardStats}
+                  disabled={statsLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${statsLoading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+              <CardTitle className="text-3xl">
+                {statsLoading ? '...' : dashboardStats.activeServices}
+              </CardTitle>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Monthly Cost</CardDescription>
-              <CardTitle className="text-3xl text-green-600">$42.60</CardTitle>
+              <CardTitle className="text-3xl text-green-600">
+                {statsLoading ? '...' : `$${dashboardStats.monthlyCost.toFixed(2)}`}
+              </CardTitle>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Active Resources</CardDescription>
-              <CardTitle className="text-3xl">87</CardTitle>
+              <CardTitle className="text-3xl">
+                {statsLoading ? '...' : dashboardStats.activeResources}
+              </CardTitle>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>System Health</CardDescription>
-              <CardTitle className="text-3xl text-green-600">98.9%</CardTitle>
+              <CardTitle className={`text-3xl ${
+                dashboardStats.systemHealth >= 90 ? 'text-green-600' : 
+                dashboardStats.systemHealth >= 70 ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {statsLoading ? '...' : `${dashboardStats.systemHealth}%`}
+              </CardTitle>
             </CardHeader>
           </Card>
         </div>

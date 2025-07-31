@@ -50,13 +50,6 @@ const services = [
     color: "text-primary",
   },
   {
-    id: "services",
-    name: "Services",
-    href: "/services",
-    icon: Settings,
-    color: "text-blue-600",
-  },
-  {
     id: "compute",
     name: "UWS-Compute",
     href: "/compute",

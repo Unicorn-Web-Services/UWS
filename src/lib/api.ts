@@ -1033,6 +1033,15 @@ class ApiService {
     );
   }
 
+  async removeNoSQLService(serviceId: string): Promise<{ message: string }> {
+    return this.apiRequest<{ message: string }>(
+      `${this.orchestratorUrl}/nosql-services/${serviceId}`,
+      {
+        method: "DELETE",
+      }
+    );
+  }
+
   // Queue service management
   async getQueueServices(): Promise<{
     queue_services: Array<{

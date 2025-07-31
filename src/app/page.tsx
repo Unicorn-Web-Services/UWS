@@ -86,14 +86,7 @@ const services = [
     href: "/nosql",
     color: "bg-indigo-500",
   },
-  {
-    id: "iam",
-    name: "IAM",
-    description: "Identity & access management",
-    icon: Shield,
-    href: "/iam",
-    color: "bg-yellow-500",
-  },
+
   {
     id: "monitoring",
     name: "Monitoring",

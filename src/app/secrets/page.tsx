@@ -1,22 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Key,
-  Plus,
-  Eye,
-  EyeOff,
-  Copy,
-  Trash2,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Play,
+  Server,
   Shield,
   Lock,
-  RefreshCw,
-  AlertTriangle,
-  Clock,
-  Settings,
+  Eye,
+  EyeOff,
+  Plus,
   Edit,
-  Search,
+  Trash2,
+  X,
 } from "lucide-react";
 import {
   Card,
@@ -27,454 +28,639 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/lib/toast-context";
 import DashboardLayout from "@/components/dashboard-layout";
+import { apiService } from "@/lib/api";
+import { Label } from "@/components/ui/label";
 
-// Mock data for secrets
-const secrets = [
-  {
-    id: "db-password",
-    name: "database-password",
-    description: "Production database password",
-    type: "password",
-    lastAccessed: "2024-01-20 14:30",
-    created: "2024-01-10",
-    tags: ["production", "database"],
-    accessCount: 145,
-  },
-  {
-    id: "api-key",
-    name: "stripe-api-key",
-    description: "Stripe payment gateway API key",
-    type: "api-key",
-    lastAccessed: "2024-01-20 12:15",
-    created: "2024-01-15",
-    tags: ["payments", "stripe"],
-    accessCount: 67,
-  },
-  {
-    id: "jwt-secret",
-    name: "jwt-signing-secret",
-    description: "JWT token signing secret",
-    type: "secret",
-    lastAccessed: "2024-01-20 09:45",
-    created: "2024-01-08",
-    tags: ["auth", "jwt"],
-    accessCount: 234,
-  },
-  {
-    id: "ssh-key",
-    name: "deployment-ssh-key",
-    description: "SSH key for deployment servers",
-    type: "ssh-key",
-    lastAccessed: "2024-01-19 16:20",
-    created: "2024-01-05",
-    tags: ["deployment", "ssh"],
-    accessCount: 89,
-  },
-];
-
-const auditLogs = [
-  {
-    id: "1",
-    action: "Secret Accessed",
-    secret: "database-password",
-    user: "john@uws.com",
-    timestamp: "2024-01-20 14:30:15",
-    ip: "192.168.1.100",
-    status: "success",
-  },
-  {
-    id: "2",
-    action: "Secret Created",
-    secret: "new-api-key",
-    user: "admin@uws.com",
-    timestamp: "2024-01-20 13:45:22",
-    ip: "192.168.1.50",
-    status: "success",
-  },
-  {
-    id: "3",
-    action: "Failed Access",
-    secret: "production-key",
-    user: "test@uws.com",
-    timestamp: "2024-01-20 12:20:33",
-    ip: "192.168.1.200",
-    status: "failed",
-  },
-];
+interface SecretsService {
+  service_id: string;
+  container_id: string;
+  node_id: string;
+  ip_address: string;
+  port: number;
+  status: string;
+  is_healthy: boolean;
+  created_at: string;
+  service_url: string;
+}
 
 export default function SecretsPage() {
-  const [selectedSecret, setSelectedSecret] = useState<string | null>(null);
-  const [showCreateSecret, setShowCreateSecret] = useState(false);
-  const [showSecretValue, setShowSecretValue] = useState<{
-    [key: string]: boolean;
-  }>({});
-  const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
+  const [secretsServices, setSecretsServices] = useState<SecretsService[]>([]);
+  const [currentService, setCurrentService] = useState<SecretsService | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [launchingService, setLaunchingService] = useState(false);
+  const [secrets, setSecrets] = useState<Array<{name: string; created_at: string; updated_at: string}>>([]);
+  const [selectedSecret, setSelectedSecret] = useState<{name: string; value: string; created_at: string; updated_at: string} | null>(null);
   const [newSecretName, setNewSecretName] = useState("");
   const [newSecretValue, setNewSecretValue] = useState("");
-  const [newSecretDescription, setNewSecretDescription] = useState("");
+  const [creatingSecret, setCreatingSecret] = useState(false);
+  const [loadingSecrets, setLoadingSecrets] = useState(false);
+  const [showSecretValue, setShowSecretValue] = useState(false);
 
-  const handleCreateSecret = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement API call
-    console.log("Creating secret:", newSecretName);
-    setNewSecretName("");
-    setNewSecretValue("");
-    setNewSecretDescription("");
-    setShowCreateSecret(false);
-  };
+  useEffect(() => {
+    fetchSecretsServices();
+  }, []);
 
-  const handleCopySecret = (secretId: string) => {
-    // TODO: Implement copy to clipboard
-    console.log("Copying secret:", secretId);
-  };
-
-  const toggleSecretVisibility = (secretId: string) => {
-    setShowSecretValue((prev) => ({
-      ...prev,
-      [secretId]: !prev[secretId],
-    }));
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "password":
-        return Lock;
-      case "api-key":
-        return Key;
-      case "ssh-key":
-        return Shield;
-      default:
-        return Key;
+  const fetchSecretsServices = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getSecretsServices();
+      setSecretsServices(response.secrets_services);
+      
+      // If we have services, use the first healthy one
+      const healthyService = response.secrets_services.find(service => service.is_healthy);
+      if (healthyService) {
+        setCurrentService(healthyService);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch secrets services",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "success":
-        return "text-green-600";
-      case "failed":
-        return "text-red-600";
-      case "warning":
-        return "text-yellow-600";
-      default:
-        return "text-muted-foreground";
+  const launchSecretsService = async () => {
+    try {
+      setLaunchingService(true);
+      const service = await apiService.launchSecretsService();
+      
+      toast({
+        title: "Success",
+        description: "Secrets service launched successfully",
+        variant: "success",
+      });
+      
+      // Refresh the services list
+      await fetchSecretsServices();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to launch secrets service",
+        variant: "destructive",
+      });
+    } finally {
+      setLaunchingService(false);
     }
   };
 
-  const filteredSecrets = secrets.filter(
-    (secret) =>
-      secret.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      secret.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      secret.tags.some((tag) =>
-        tag.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  );
+  const checkServiceHealth = async (serviceId: string) => {
+    try {
+      const health = await apiService.checkSecretsServiceHealth(serviceId);
+      toast({
+        title: health.is_healthy ? "Service Healthy" : "Service Unhealthy",
+        description: `Last check: ${new Date(health.last_check).toLocaleString()}`,
+        variant: health.is_healthy ? "success" : "destructive",
+      });
+      await fetchSecretsServices();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to check service health",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const createSecret = async () => {
+    if (!currentService || !newSecretName.trim() || !newSecretValue.trim()) return;
+
+    try {
+      setCreatingSecret(true);
+      await apiService.createSecret(currentService.service_id, newSecretName.trim(), newSecretValue.trim());
+      
+      toast({
+        title: "Success",
+        description: "Secret created successfully",
+        variant: "success",
+      });
+      
+      setNewSecretName("");
+      setNewSecretValue("");
+      await listSecrets();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create secret",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingSecret(false);
+    }
+  };
+
+  const listSecrets = async () => {
+    if (!currentService) return;
+
+    try {
+      setLoadingSecrets(true);
+      const response = await apiService.listSecrets(currentService.service_id);
+      setSecrets(response.secrets);
+      
+      toast({
+        title: "Success",
+        description: `Found ${response.secrets.length} secrets`,
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to list secrets",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSecrets(false);
+    }
+  };
+
+  const getSecret = async (secretName: string) => {
+    if (!currentService) return;
+
+    try {
+      const response = await apiService.getSecret(currentService.service_id, secretName);
+      if (response.secret) {
+        setSelectedSecret(response.secret);
+        setShowSecretValue(false);
+      } else {
+        toast({
+          title: "Error",
+          description: "Secret not found",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get secret",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteSecret = async (secretName: string) => {
+    if (!currentService) return;
+
+    try {
+      await apiService.deleteSecret(currentService.service_id, secretName);
+      
+      toast({
+        title: "Success",
+        description: "Secret deleted successfully",
+        variant: "success",
+      });
+      
+      setSelectedSecret(null);
+      await listSecrets();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete secret",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteSecretsService = async (serviceId: string) => {
+    try {
+      await apiService.removeSecretsService(serviceId);
+      toast({
+        title: "Success",
+        description: "Secrets service deleted successfully",
+        variant: "success",
+      });
+      await fetchSecretsServices();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete secrets service",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Key className="h-8 w-8 text-service-secrets" />
-            <div>
-              <h1 className="text-3xl font-bold">UWS-Secrets</h1>
-              <p className="text-muted-foreground">
-                Encrypted secrets management
-              </p>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">UWS Secrets</h1>
+          <p className="text-muted-foreground">
+            Secure secrets management service with encryption
+          </p>
+        </div>
+
+        {/* Secrets Service Status */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Shield className="h-5 w-5" />
+                <CardTitle>Secrets Service Status</CardTitle>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchSecretsServices}
+                disabled={loading}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
             </div>
-          </div>
-          <Button onClick={() => setShowCreateSecret(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Secret
-          </Button>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Total Secrets</CardDescription>
-              <CardTitle className="text-2xl">{secrets.length}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Total Accesses</CardDescription>
-              <CardTitle className="text-2xl">535</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Failed Attempts</CardDescription>
-              <CardTitle className="text-2xl text-red-600">12</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Active Users</CardDescription>
-              <CardTitle className="text-2xl">8</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Secrets List */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Secrets
-                  </CardTitle>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search secrets..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 w-64"
-                    />
-                  </div>
-                </div>
-                <CardDescription>
-                  Manage your encrypted secrets and API keys
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {filteredSecrets.map((secret) => {
-                    const TypeIcon = getTypeIcon(secret.type);
-                    return (
-                      <motion.div
-                        key={secret.id}
-                        whileHover={{ scale: 1.01 }}
-                        className="p-4 rounded-lg border hover:bg-accent cursor-pointer"
-                        onClick={() => setSelectedSecret(secret.id)}
+            <CardDescription>
+              Manage your secrets service instances
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {secretsServices.length === 0 ? (
+              <div className="text-center py-8">
+                <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">No secrets services running</p>
+                <Button
+                  onClick={launchSecretsService}
+                  disabled={launchingService}
+                >
+                  {launchingService ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2 animate-spin" />
+                      Launching...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      Launch Secrets Service
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {secretsServices.map((service) => (
+                  <motion.div
+                    key={service.service_id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-between p-4 border rounded-lg"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-3 h-3 rounded-full ${service.is_healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <div>
+                        <div className="font-medium">Secrets Service {service.service_id.slice(-8)}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {service.ip_address}:{service.port} • {service.status}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => checkServiceHealth(service.service_id)}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <TypeIcon className="h-5 w-5 text-service-secrets" />
-                            <div>
-                              <div className="font-medium">{secret.name}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {secret.description}
-                              </div>
-                              <div className="flex gap-1 mt-1">
-                                {secret.tags.map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className="text-xs bg-primary/10 text-primary px-2 py-1 rounded"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Health Check
+                      </Button>
+                      {service.is_healthy && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentService(service)}
+                        >
+                          Use This Service
+                        </Button>
+                      )}
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteSecretsService(service.service_id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Secrets Operations */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Key className="h-5 w-5" />
+              <span>Secrets Operations</span>
+            </CardTitle>
+            <CardDescription>
+              Manage your encrypted secrets and sensitive data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!currentService ? (
+              <div className="text-center py-8">
+                <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No secrets service connected</p>
+                <p className="text-sm text-muted-foreground">Launch a secrets service to start managing encrypted data</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-medium mb-2">Secrets Service Connected</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Service URL: {currentService.service_url}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Service ID: {currentService.service_id}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Plus className="h-4 w-4" />
+                        <span className="font-medium">Store Secret</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Securely store encrypted secrets
+                      </p>
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Secret name..."
+                          value={newSecretName}
+                          onChange={(e) => setNewSecretName(e.target.value)}
+                        />
+                        <Input
+                          type="password"
+                          placeholder="Secret value..."
+                          value={newSecretValue}
+                          onChange={(e) => setNewSecretValue(e.target.value)}
+                        />
+                        <Button 
+                          size="sm" 
+                          className="w-full" 
+                          onClick={createSecret}
+                          disabled={!newSecretName.trim() || !newSecretValue.trim() || creatingSecret}
+                        >
+                          {creatingSecret ? (
+                            <>
+                              <Clock className="h-4 w-4 mr-2 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4 mr-2" />
+                              Store Secret
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Eye className="h-4 w-4" />
+                        <span className="font-medium">List Secrets</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        View all stored secrets
+                      </p>
+                      <Button 
+                        size="sm" 
+                        className="w-full" 
+                        onClick={listSecrets}
+                        disabled={loadingSecrets}
+                      >
+                        {loadingSecrets ? (
+                          <>
+                            <Clock className="h-4 w-4 mr-2 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-4 w-4 mr-2" />
+                            List Secrets
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Trash2 className="h-4 w-4" />
+                        <span className="font-medium">Delete Secret</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Permanently remove secrets
+                      </p>
+                      <Button 
+                        size="sm" 
+                        className="w-full" 
+                        disabled
+                      >
+                        Select from list
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {secrets.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Stored Secrets</CardTitle>
+                      <CardDescription>
+                        Encrypted secrets in storage ({secrets.length} total)
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 max-h-64 overflow-auto">
+                        {secrets.map((secret) => (
+                          <div
+                            key={secret.name}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="flex-1">
+                              <p className="font-medium">{secret.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Created: {new Date(secret.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => getSecret(secret.name)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteSecret(secret.name)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {selectedSecret && (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">Secret Details</CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedSecret(null)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <CardDescription>
+                        Secret: {selectedSecret.name}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Secret Value</Label>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <Input
+                              type={showSecretValue ? "text" : "password"}
+                              value={selectedSecret.value}
+                              readOnly
+                              className="flex-1"
+                            />
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSecretVisibility(secret.id);
-                              }}
+                              onClick={() => setShowSecretValue(!showSecretValue)}
                             >
-                              {showSecretValue[secret.id] ? (
+                              {showSecretValue ? (
                                 <EyeOff className="h-4 w-4" />
                               ) : (
                                 <Eye className="h-4 w-4" />
                               )}
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopySecret(secret.id);
-                              }}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
                           </div>
                         </div>
-                        {showSecretValue[secret.id] && (
-                          <div className="mt-3 p-3 bg-slate-900 text-slate-100 rounded font-mono text-sm">
-                            <div className="text-slate-500">
-                              // Secret Value (Encrypted)
-                            </div>
-                            <div className="mt-1 break-all">
-                              {secret.type === "ssh-key"
-                                ? "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC..."
-                                : "••••••••••••••••••••••••••••••••"}
-                            </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <Label>Created</Label>
+                            <p className="text-muted-foreground">
+                              {new Date(selectedSecret.created_at).toLocaleString()}
+                            </p>
                           </div>
-                        )}
-                        <div className="mt-3 text-xs text-muted-foreground">
-                          Last accessed: {secret.lastAccessed} •{" "}
-                          {secret.accessCount} total accesses
+                          <div>
+                            <Label>Updated</Label>
+                            <p className="text-muted-foreground">
+                              {new Date(selectedSecret.updated_at).toLocaleString()}
+                            </p>
+                          </div>
                         </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-            {/* Create Secret Form */}
-            {showCreateSecret && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-6"
-              >
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <h4 className="font-medium text-red-900 mb-1">Secrets Service Ready</h4>
+                  <p className="text-sm text-red-700">
+                    Your secrets management service is running and ready to securely store encrypted data. 
+                    All secrets are encrypted using Fernet encryption before storage.
+                  </p>
+                </div>
+
+                {/* Security Features */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Create New Secret</CardTitle>
+                    <CardTitle className="text-lg flex items-center space-x-2">
+                      <Lock className="h-5 w-5" />
+                      <span>Security Features</span>
+                    </CardTitle>
                     <CardDescription>
-                      Store a new encrypted secret
+                      Your secrets are protected with industry-standard encryption
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleCreateSecret} className="space-y-4">
-                      <div>
-                        <Input
-                          placeholder="Secret name"
-                          value={newSecretName}
-                          onChange={(e) => setNewSecretName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Input
-                          placeholder="Description"
-                          value={newSecretDescription}
-                          onChange={(e) =>
-                            setNewSecretDescription(e.target.value)
-                          }
-                          required
-                        />
-                      </div>
-                      <div>
-                        <textarea
-                          placeholder="Secret value"
-                          value={newSecretValue}
-                          onChange={(e) => setNewSecretValue(e.target.value)}
-                          className="w-full p-2 border rounded-md h-24 resize-none font-mono"
-                          required
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="submit" size="sm">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create Secret
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowCreateSecret(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </form>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-          </div>
-
-          {/* Audit Logs */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Audit Logs
-                </CardTitle>
-                <CardDescription>Recent secret access activity</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {auditLogs.map((log) => (
-                    <div key={log.id} className="p-3 rounded-lg border">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-medium text-sm">{log.action}</div>
-                        <div
-                          className={`text-xs ${getStatusColor(log.status)}`}
-                        >
-                          {log.status}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Shield className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium">Fernet Encryption</h5>
+                          <p className="text-sm text-muted-foreground">
+                            All secrets encrypted with symmetric Fernet encryption
+                          </p>
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground space-y-1">
-                        <div>Secret: {log.secret}</div>
-                        <div>User: {log.user}</div>
-                        <div>IP: {log.ip}</div>
-                        <div>{log.timestamp}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Security Recommendations */}
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Security Tips
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0" />
-                    <div>
-                      <div className="font-medium">
-                        Rotate secrets regularly
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Key className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium">Secure Key Management</h5>
+                          <p className="text-sm text-muted-foreground">
+                            Encryption keys managed securely by the service
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-muted-foreground">
-                        Change secrets every 90 days
+
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Lock className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium">Encrypted Storage</h5>
+                          <p className="text-sm text-muted-foreground">
+                            Secrets stored encrypted in the database
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-yellow-500 mt-2 flex-shrink-0" />
-                    <div>
-                      <div className="font-medium">Monitor access patterns</div>
-                      <div className="text-muted-foreground">
-                        Review audit logs regularly
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
-                    <div>
-                      <div className="font-medium">
-                        Use principle of least privilege
-                      </div>
-                      <div className="text-muted-foreground">
-                        Grant minimal required access
+
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <CheckCircle className="h-4 w-4 text-orange-600" />
+                        </div>
+                        <div>
+                          <h5 className="font-medium">Audit Trail</h5>
+                          <p className="text-sm text-muted-foreground">
+                            Track creation and modification timestamps
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

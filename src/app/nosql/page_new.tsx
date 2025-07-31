@@ -339,24 +339,6 @@ export default function NoSQLPage() {
     }
   };
 
-  const deleteNoSQLService = async (serviceId: string) => {
-    try {
-      await apiService.removeNoSQLService(serviceId);
-      toast({
-        title: "Success",
-        description: "NoSQL service deleted successfully",
-        variant: "success",
-      });
-      await fetchNoSQLServices();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete NoSQL service",
-        variant: "destructive",
-      });
-    }
-  };
-
   const startEditEntity = (entity: NoSQLEntity) => {
     setEditingEntity(entity);
     // Create a copy without the _id for editing
@@ -404,23 +386,6 @@ export default function NoSQLPage() {
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
-              </Button>
-              <Button
-                onClick={launchNoSQLService}
-                disabled={launchingService}
-                className="w-auto"
-              >
-                {launchingService ? (
-                  <>
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Launching...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Launch NoSQL Service
-                  </>
-                )}
               </Button>
             </div>
             <CardDescription>
@@ -500,13 +465,6 @@ export default function NoSQLPage() {
                           Connect
                         </Button>
                       )}
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteNoSQLService(service.service_id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                   </motion.div>
                 ))}

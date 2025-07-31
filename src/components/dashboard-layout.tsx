@@ -24,6 +24,7 @@ import {
   Building2,
   LogOut,
   ChevronDown,
+  RefreshCcwIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth-context";
+import { useApiConfig } from "@/lib/hooks/useApi";
+import { useToast } from "@/lib/toast-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const services = [
@@ -47,6 +50,13 @@ const services = [
     color: "text-primary",
   },
   {
+    id: "services",
+    name: "Services",
+    href: "/services",
+    icon: Settings,
+    color: "text-blue-600",
+  },
+  {
     id: "compute",
     name: "UWS-Compute",
     href: "/compute",
@@ -56,7 +66,7 @@ const services = [
   {
     id: "storage",
     name: "UWS-S3",
-    href: "/storage",
+    href: "/buckets",
     icon: Cloud,
     color: "service-storage",
   },
@@ -95,13 +105,7 @@ const services = [
     icon: Key,
     color: "service-secrets",
   },
-  {
-    id: "iam",
-    name: "UWS-IAM",
-    href: "/iam",
-    icon: Shield,
-    color: "service-iam",
-  },
+
   {
     id: "monitoring",
     name: "UWS-Monitoring",
@@ -127,13 +131,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const { user, userProfile, company, companies, switchCompany, logout } =
     useAuth();
+  const { toast } = useToast();
   const router = useRouter();
+
+  // Initialize API configuration
+  useApiConfig();
 
   const handleLogout = async () => {
     try {
       await logout();
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+        variant: "success",
+      });
     } catch (error) {
-      console.error("Logout error:", error);
+      toast({
+        title: "Logout error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -188,7 +205,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <DropdownMenuSeparator />
 
                   {/* Current Company Actions */}
-                  <DropdownMenuItem onClick={() => router.push("/company")}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      router.push("/company");
+                      console.log(companies);
+                    }}
+                  >
                     <Settings className="h-4 w-4 mr-2" />
                     Company Settings
                   </DropdownMenuItem>
@@ -198,42 +220,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </DropdownMenuItem>
 
                   {/* Other Companies */}
-                  {companies && companies.length > 1 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">
-                        Switch Company
-                      </DropdownMenuLabel>
-                      {companies
-                        .filter((c) => c.id !== company.id)
-                        .map((otherCompany) => (
-                          <DropdownMenuItem
-                            key={otherCompany.id}
-                            onClick={() => handleCompanySwitch(otherCompany.id)}
-                            className="flex items-center justify-between"
-                          >
-                            <div className="flex items-center">
-                              <Building2 className="h-4 w-4 mr-2" />
-                              <div>
-                                <div className="font-medium">
-                                  {otherCompany.name}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  /{otherCompany.slug}
-                                </div>
-                              </div>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => router.push("/select-company")}
-                      >
-                        <Building2 className="h-4 w-4 mr-2" />
-                        View All Companies
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  <DropdownMenuItem
+                    onClick={() => router.push("/select-company")}
+                  >
+                    <RefreshCcwIcon className="h-4 w-4 mr-2" />
+                    Switch Company
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -277,7 +269,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/profile")}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>

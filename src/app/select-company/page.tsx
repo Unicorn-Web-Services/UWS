@@ -2,8 +2,23 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Building2, Users, Plus, ArrowRight, Crown, Shield, Code, Eye } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Building2,
+  Users,
+  Plus,
+  ArrowRight,
+  Crown,
+  Shield,
+  Code,
+  Eye,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -34,9 +49,6 @@ export default function CompanySelectorPage() {
         router.push("/login");
       } else if (!companies || companies.length === 0) {
         router.push("/setup");
-      } else if (companies.length === 1) {
-        // If user only has one company, automatically switch to it
-        handleCompanySelect(companies[0].id);
       }
     }
   }, [user, companies, loading, router]);
@@ -53,7 +65,9 @@ export default function CompanySelectorPage() {
     }
   };
 
-  const getUserRole = (company: any): "owner" | "admin" | "developer" | "viewer" => {
+  const getUserRole = (
+    company: any
+  ): "owner" | "admin" | "developer" | "viewer" => {
     if (!user) return "viewer";
     if (company.ownerId === user.uid) return "owner";
     // In a real app, you'd have role information stored per user per company
@@ -84,7 +98,9 @@ export default function CompanySelectorPage() {
           >
             <Building2 className="h-8 w-8 text-white" />
           </motion.div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome back!</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+            Welcome back!
+          </h1>
           <p className="text-xl text-gray-600">
             Choose which company you'd like to manage today
           </p>
@@ -104,16 +120,18 @@ export default function CompanySelectorPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card 
+                <Card
                   className={`cursor-pointer hover:shadow-lg transition-all h-full ${
-                    isLoading ? 'opacity-50' : ''
+                    isLoading ? "opacity-50" : ""
                   }`}
                   onClick={() => !isLoading && handleCompanySelect(company.id)}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <CardTitle className="text-xl mb-1">{company.name}</CardTitle>
+                        <CardTitle className="text-xl mb-1">
+                          {company.name}
+                        </CardTitle>
                         <CardDescription className="text-sm">
                           /{company.slug}
                         </CardDescription>
@@ -131,7 +149,9 @@ export default function CompanySelectorPage() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Plan:</span>
-                        <span className="font-medium capitalize">{company.plan}</span>
+                        <span className="font-medium capitalize">
+                          {company.plan}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Members:</span>
@@ -144,12 +164,9 @@ export default function CompanySelectorPage() {
                         <span className="text-muted-foreground">Created:</span>
                         <span>{company.createdAt.toLocaleDateString()}</span>
                       </div>
-                      
+
                       <div className="pt-2">
-                        <Button 
-                          className="w-full"
-                          disabled={isLoading}
-                        >
+                        <Button className="w-full" disabled={isLoading}>
                           {isLoading ? (
                             <div className="flex items-center gap-2">
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -180,10 +197,7 @@ export default function CompanySelectorPage() {
               <p className="text-muted-foreground mb-4">
                 Start fresh with a new company and invite your team
               </p>
-              <Button 
-                variant="outline"
-                onClick={() => router.push("/setup")}
-              >
+              <Button variant="outline" onClick={() => router.push("/setup")}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Company
               </Button>
@@ -194,7 +208,8 @@ export default function CompanySelectorPage() {
         {/* User Info */}
         <div className="text-center mt-8">
           <p className="text-sm text-muted-foreground">
-            Signed in as <span className="font-medium">{userProfile.displayName}</span>
+            Signed in as{" "}
+            <span className="font-medium">{userProfile.displayName}</span>
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   CreditCard,
@@ -19,6 +19,11 @@ import {
   Server,
   Database,
   Cloud,
+  RefreshCw,
+  Calculator,
+  PieChart,
+  LineChart,
+  Gauge,
 } from "lucide-react";
 import {
   Card,
@@ -29,136 +34,176 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import DashboardLayout from "@/components/dashboard-layout";
+import { apiService } from "@/lib/api";
 
-// Mock data for billing
-const currentUsage = [
-  {
-    service: "UWS-Compute",
-    icon: Server,
-    usage: "145 container hours",
-    cost: "$14.50",
-    trend: "up",
-    percentage: 34.1,
-  },
-  {
-    service: "UWS-Storage",
-    icon: Cloud,
-    usage: "189.8 GB stored",
-    cost: "$9.49",
-    trend: "stable",
-    percentage: 22.3,
-  },
-  {
-    service: "UWS-Database",
-    icon: Database,
-    usage: "87 instance hours",
-    cost: "$8.70",
-    trend: "down",
-    percentage: 20.4,
-  },
-  {
-    service: "UWS-Lambda",
-    icon: Zap,
-    usage: "2.4M executions",
-    cost: "$4.80",
-    trend: "up",
-    percentage: 11.3,
-  },
-  {
-    service: "UWS-Queue",
-    usage: "1.2M requests",
-    cost: "$2.40",
-    trend: "stable",
-    percentage: 5.6,
-  },
-  {
-    service: "UWS-Other",
-    usage: "Various services",
-    cost: "$2.61",
-    trend: "up",
-    percentage: 6.3,
-  },
-];
+// Types
+interface UsageData {
+  service_id: string;
+  service_type: string;
+  usage_amount: number;
+  unit: string;
+  cost: number;
+  timestamp: string;
+  extra_data: Record<string, any>;
+}
 
-// Mock data for billing history
-const billingHistory = [
-  {
-    id: "inv-2024-01",
-    period: "January 2024",
-    amount: "$42.60",
-    status: "paid",
-    dueDate: "2024-02-01",
-    services: 6,
-  },
-  {
-    id: "inv-2023-12",
-    period: "December 2023",
-    amount: "$38.45",
-    status: "paid",
-    dueDate: "2024-01-01",
-    services: 5,
-  },
-  {
-    id: "inv-2023-11",
-    period: "November 2023",
-    amount: "$35.20",
-    status: "paid",
-    dueDate: "2023-12-01",
-    services: 4,
-  },
-];
+interface CostBreakdown {
+  service_type: string;
+  usage: number;
+  unit: string;
+  rate: number;
+  cost: number;
+  percentage: number;
+}
 
-// Mock data for cost alerts
-const costAlerts = [
-  {
-    id: "alert-1",
-    name: "Monthly Budget Alert",
-    threshold: "$50.00",
-    current: "$42.60",
-    status: "active",
-    percentage: 85.2,
-  },
-  {
-    id: "alert-2",
-    name: "Compute Usage Alert",
-    threshold: "$20.00",
-    current: "$14.50",
-    status: "ok",
-    percentage: 72.5,
-  },
-];
+interface Invoice {
+  invoice_id: string;
+  period: string;
+  start_date: string;
+  end_date: string;
+  total_amount: number;
+  status: string;
+  due_date: string;
+  created_at: string;
+}
 
-// Mock data for forecasting
-const costForecast = {
-  thisMonth: "$42.60",
-  projected: "$48.30",
-  lastMonth: "$38.45",
-  trend: "up",
-  savings: "$2.15",
-};
+interface SpendingLimits {
+  monthly: number;
+  daily: number;
+  hourly: number;
+}
+
+interface CostForecast {
+  current_cost: number;
+  projected_cost: number;
+  daily_average: number;
+  remaining_days: number;
+}
 
 export default function BillingPage() {
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "usage" | "history" | "alerts"
-  >("overview");
-  const [selectedPeriod, setSelectedPeriod] = useState("current");
+  const [activeTab, setActiveTab] = useState<"overview" | "usage" | "history" | "alerts" | "limits">("overview");
+  const [selectedPeriod, setSelectedPeriod] = useState("monthly");
   const [showCreateAlert, setShowCreateAlert] = useState(false);
+  const [showSetLimit, setShowSetLimit] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Data states
+  const [usage, setUsage] = useState<UsageData[]>([]);
+  const [costBreakdown, setCostBreakdown] = useState<CostBreakdown[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [spendingLimits, setSpendingLimits] = useState<SpendingLimits>({ monthly: 100, daily: 5, hourly: 0.5 });
+  const [costForecast, setCostForecast] = useState<CostForecast>({ current_cost: 0, projected_cost: 0, daily_average: 0, remaining_days: 0 });
+
+  // Form states
   const [newAlertName, setNewAlertName] = useState("");
   const [newAlertThreshold, setNewAlertThreshold] = useState("");
+  const [newAlertPeriod, setNewAlertPeriod] = useState("monthly");
+  
+  const [newLimitPeriod, setNewLimitPeriod] = useState("monthly");
+  const [newLimitAmount, setNewLimitAmount] = useState("");
+
+  // Load data on component mount
+  useEffect(() => {
+    loadData();
+    // Set up periodic updates
+    const interval = setInterval(loadData, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [selectedPeriod]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Load current usage
+      const usageData = await apiService.getCurrentUsage();
+      setUsage(usageData?.usage || []);
+
+      // Load cost breakdown
+      const breakdownData = await apiService.getCostBreakdown(selectedPeriod);
+      setCostBreakdown(breakdownData?.breakdown || []);
+
+      // Load billing history
+      const historyData = await apiService.getBillingHistory(10);
+      setInvoices(historyData?.invoices || []);
+
+      // Load spending limits
+      const limitsData = await apiService.getSpendingLimits();
+      setSpendingLimits(limitsData?.spending_limits || { monthly: 100, daily: 5, hourly: 0.5 });
+
+      // Load cost forecast
+      const forecastData = await apiService.getCostForecast();
+      setCostForecast(forecastData || { current_cost: 0, projected_cost: 0, daily_average: 0, remaining_days: 0 });
+
+    } catch (error) {
+      console.error("Error loading billing data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateAlert = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement API call
-    console.log("Creating cost alert:", newAlertName, newAlertThreshold);
-    setNewAlertName("");
-    setNewAlertThreshold("");
-    setShowCreateAlert(false);
+    try {
+      await apiService.createBillingAlert({
+        type: "spending_limit",
+        period: newAlertPeriod,
+        limit_amount: parseFloat(newAlertThreshold),
+        message: `${newAlertName} - ${newAlertPeriod} spending limit`,
+      });
+
+      // Reset form
+      setNewAlertName("");
+      setNewAlertThreshold("");
+      setShowCreateAlert(false);
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error("Error creating billing alert:", error);
+    }
   };
 
-  const handleDownloadInvoice = (invoiceId: string) => {
-    // TODO: Implement invoice download
-    console.log("Downloading invoice:", invoiceId);
+  const handleSetSpendingLimit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiService.setSpendingLimit(newLimitPeriod, parseFloat(newLimitAmount));
+
+      // Reset form
+      setNewLimitAmount("");
+      setShowSetLimit(false);
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error("Error setting spending limit:", error);
+    }
+  };
+
+  const handleDownloadInvoice = async (invoiceId: string) => {
+    try {
+      const invoiceDetails = await apiService.getInvoiceDetails(invoiceId);
+      // Create a downloadable invoice (simplified)
+      const invoiceText = `
+INVOICE
+ID: ${invoiceDetails.invoice_id}
+Period: ${invoiceDetails.period}
+Amount: $${invoiceDetails.total_amount}
+Status: ${invoiceDetails.status}
+Due Date: ${invoiceDetails.due_date}
+      `;
+      
+      const blob = new Blob([invoiceText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${invoiceId}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading invoice:", error);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -185,6 +230,30 @@ export default function BillingPage() {
     }
   };
 
+  const getServiceIcon = (serviceType: string) => {
+    switch (serviceType) {
+      case "compute":
+        return <Server className="h-4 w-4" />;
+      case "storage":
+        return <Cloud className="h-4 w-4" />;
+      case "database":
+        return <Database className="h-4 w-4" />;
+      case "nosql":
+        return <Database className="h-4 w-4" />;
+      case "queue":
+        return <Zap className="h-4 w-4" />;
+      case "secrets":
+        return <Eye className="h-4 w-4" />;
+      default:
+        return <Server className="h-4 w-4" />;
+    }
+  };
+
+  const totalCurrentCost = usage.reduce((sum, item) => sum + item.cost, 0);
+  const totalProjectedCost = costForecast.projected_cost;
+  const monthlyLimit = spendingLimits.monthly;
+  const usagePercentage = (totalCurrentCost / monthlyLimit) * 100;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -195,7 +264,7 @@ export default function BillingPage() {
             <div>
               <h1 className="text-3xl font-bold">UWS-Billing</h1>
               <p className="text-muted-foreground">
-                Usage tracking and cost management
+                Usage tracking and cost management with spending limits
               </p>
             </div>
           </div>
@@ -204,9 +273,13 @@ export default function BillingPage() {
               <Plus className="h-4 w-4 mr-2" />
               Cost Alert
             </Button>
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export
+            <Button onClick={() => setShowSetLimit(true)} variant="outline">
+              <Settings className="h-4 w-4 mr-2" />
+              Set Limits
+            </Button>
+            <Button onClick={loadData} variant="outline" disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
           </div>
         </div>
@@ -220,7 +293,7 @@ export default function BillingPage() {
                 Current Month
               </CardDescription>
               <CardTitle className="text-2xl text-blue-600">
-                ${costForecast.thisMonth}
+                ${totalCurrentCost.toFixed(2)}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -231,7 +304,7 @@ export default function BillingPage() {
                 Projected Cost
               </CardDescription>
               <CardTitle className="text-2xl text-orange-600">
-                ${costForecast.projected}
+                ${totalProjectedCost.toFixed(2)}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -239,21 +312,21 @@ export default function BillingPage() {
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                Last Month
+                Monthly Limit
               </CardDescription>
               <CardTitle className="text-2xl">
-                ${costForecast.lastMonth}
+                ${monthlyLimit.toFixed(2)}
               </CardTitle>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center gap-2">
-                <TrendingDown className="h-4 w-4" />
-                Potential Savings
+                <Gauge className="h-4 w-4" />
+                Usage
               </CardDescription>
-              <CardTitle className="text-2xl text-green-600">
-                ${costForecast.savings}
+              <CardTitle className={`text-2xl ${usagePercentage > 80 ? 'text-red-600' : usagePercentage > 60 ? 'text-yellow-600' : 'text-green-600'}`}>
+                {usagePercentage.toFixed(1)}%
               </CardTitle>
             </CardHeader>
           </Card>
@@ -296,6 +369,17 @@ export default function BillingPage() {
               Billing History
             </button>
             <button
+              onClick={() => setActiveTab("limits")}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "limits"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Settings className="h-4 w-4 inline mr-2" />
+              Spending Limits
+            </button>
+            <button
               onClick={() => setActiveTab("alerts")}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === "alerts"
@@ -322,38 +406,35 @@ export default function BillingPage() {
                       Cost Breakdown
                     </CardTitle>
                     <CardDescription>
-                      Current month spending by service
+                      Current {selectedPeriod} spending by service
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {currentUsage.map((item) => {
-                        const Icon = item.icon || Server;
-                        return (
-                          <div
-                            key={item.service}
-                            className="flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Icon className="h-5 w-5 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">
-                                  {item.service}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {item.usage}
-                                </div>
+                      {costBreakdown.map((item) => (
+                        <div
+                          key={item.service_type}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            {getServiceIcon(item.service_type)}
+                            <div>
+                              <div className="font-medium capitalize">
+                                {item.service_type}
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-medium">{item.cost}</div>
                               <div className="text-sm text-muted-foreground">
-                                {item.percentage}%
+                                {item.usage.toFixed(2)} {item.unit}
                               </div>
                             </div>
                           </div>
-                        );
-                      })}
+                          <div className="text-right">
+                            <div className="font-medium">${item.cost.toFixed(2)}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {item.percentage.toFixed(1)}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -365,14 +446,14 @@ export default function BillingPage() {
                       Cost Trends
                     </CardTitle>
                     <CardDescription>
-                      Spending trends over the last 6 months
+                      Spending trends over time
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-64 flex items-center justify-center bg-slate-50 rounded-lg">
                       <div className="text-center text-muted-foreground">
-                        <BarChart3 className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                        <p>Cost trend chart would be rendered here</p>
+                        <LineChart className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                        <p>Cost trend chart</p>
                         <p className="text-sm">Historical spending analysis</p>
                       </div>
                     </div>
@@ -384,7 +465,7 @@ export default function BillingPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
+                    <Calculator className="h-5 w-5" />
                     Cost Forecast
                   </CardTitle>
                   <CardDescription>
@@ -392,10 +473,10 @@ export default function BillingPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-blue-600">
-                        ${costForecast.thisMonth}
+                        ${costForecast.current_cost.toFixed(2)}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Current Month
@@ -403,7 +484,7 @@ export default function BillingPage() {
                     </div>
                     <div className="text-center">
                       <div className="text-3xl font-bold text-orange-600">
-                        ${costForecast.projected}
+                        ${costForecast.projected_cost.toFixed(2)}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Projected Total
@@ -411,10 +492,18 @@ export default function BillingPage() {
                     </div>
                     <div className="text-center">
                       <div className="text-3xl font-bold text-green-600">
-                        +13%
+                        ${costForecast.daily_average.toFixed(2)}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        vs Last Month
+                        Daily Average
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-purple-600">
+                        {costForecast.remaining_days}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Days Remaining
                       </div>
                     </div>
                   </div>
@@ -424,33 +513,59 @@ export default function BillingPage() {
           )}
 
           {activeTab === "usage" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {currentUsage.map((service) => {
-                const Icon = service.icon || Server;
-                return (
+            <div className="space-y-6">
+              {/* Usage Period Selector */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Usage Period</CardTitle>
+                  <CardDescription>Select the time period for usage analysis</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-4">
+                    <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="hourly">Hourly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Usage Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {costBreakdown.map((service) => (
                   <motion.div
-                    key={service.service}
+                    key={service.service_type}
                     whileHover={{ scale: 1.02 }}
                   >
                     <Card className="h-full">
                       <CardHeader>
                         <div className="flex items-center justify-between">
-                          <Icon className="h-6 w-6 text-service-billing" />
-                          {getTrendIcon(service.trend)}
+                          {getServiceIcon(service.service_type)}
+                          <Badge variant="outline">
+                            {service.percentage.toFixed(1)}%
+                          </Badge>
                         </div>
-                        <CardTitle className="text-lg">
-                          {service.service}
+                        <CardTitle className="text-lg capitalize">
+                          {service.service_type}
                         </CardTitle>
-                        <CardDescription>{service.usage}</CardDescription>
+                        <CardDescription>
+                          {service.usage.toFixed(2)} {service.unit}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
                           <div className="text-center">
                             <div className="text-2xl font-bold text-blue-600">
-                              {service.cost}
+                              ${service.cost.toFixed(2)}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              Current Month
+                              Total Cost
                             </div>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -462,14 +577,14 @@ export default function BillingPage() {
                             />
                           </div>
                           <div className="text-xs text-center text-muted-foreground">
-                            {service.percentage}% of total spend
+                            ${service.rate.toFixed(4)} per {service.unit}
                           </div>
                         </div>
                       </CardContent>
                     </Card>
                   </motion.div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           )}
 
@@ -486,9 +601,9 @@ export default function BillingPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {billingHistory.map((invoice) => (
+                  {invoices.map((invoice) => (
                     <div
-                      key={invoice.id}
+                      key={invoice.invoice_id}
                       className="flex items-center justify-between p-4 rounded-lg border"
                     >
                       <div className="flex items-center gap-4">
@@ -496,25 +611,21 @@ export default function BillingPage() {
                         <div>
                           <div className="font-medium">{invoice.period}</div>
                           <div className="text-sm text-muted-foreground">
-                            {invoice.services} services • Due: {invoice.dueDate}
+                            {new Date(invoice.start_date).toLocaleDateString()} - {new Date(invoice.end_date).toLocaleDateString()}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <div className="font-medium">{invoice.amount}</div>
-                          <div
-                            className={`text-xs px-2 py-1 rounded ${getStatusColor(
-                              invoice.status
-                            )}`}
-                          >
+                          <div className="font-medium">${invoice.total_amount.toFixed(2)}</div>
+                          <Badge className={getStatusColor(invoice.status)}>
                             {invoice.status}
-                          </div>
+                          </Badge>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDownloadInvoice(invoice.id)}
+                          onClick={() => handleDownloadInvoice(invoice.invoice_id)}
                         >
                           <Download className="h-4 w-4" />
                         </Button>
@@ -526,170 +637,198 @@ export default function BillingPage() {
             </Card>
           )}
 
-          {activeTab === "alerts" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Cost Alerts */}
-              <div className="lg:col-span-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5" />
-                      Cost Alerts ({costAlerts.length})
-                    </CardTitle>
-                    <CardDescription>
-                      Monitor your spending with custom alerts
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {costAlerts.map((alert) => (
-                        <div key={alert.id} className="p-4 rounded-lg border">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium">{alert.name}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {alert.current} of {alert.threshold} budget used
-                              </div>
-                            </div>
-                            <div
-                              className={`text-xs px-2 py-1 rounded ${
-                                alert.status === "active"
-                                  ? "text-red-600 bg-red-100"
-                                  : "text-green-600 bg-green-100"
-                              }`}
-                            >
-                              {alert.status}
-                            </div>
+          {activeTab === "limits" && (
+            <div className="space-y-6">
+              {/* Current Limits */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Current Spending Limits</CardTitle>
+                  <CardDescription>Your configured spending limits</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="text-center p-4 border rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">
+                        ${spendingLimits.monthly.toFixed(2)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Monthly Limit</div>
+                    </div>
+                    <div className="text-center p-4 border rounded-lg">
+                      <div className="text-2xl font-bold text-orange-600">
+                        ${spendingLimits.daily.toFixed(2)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Daily Limit</div>
+                    </div>
+                    <div className="text-center p-4 border rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">
+                        ${spendingLimits.hourly.toFixed(2)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Hourly Limit</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Set New Limit Form */}
+              {showSetLimit && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Set Spending Limit</CardTitle>
+                      <CardDescription>
+                        Configure spending limits for different time periods
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSetSpendingLimit} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium">Period</label>
+                            <Select value={newLimitPeriod} onValueChange={setNewLimitPeriod}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="hourly">Hourly</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <div className="mt-3">
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full ${
-                                  alert.percentage > 90
-                                    ? "bg-red-600"
-                                    : alert.percentage > 75
-                                    ? "bg-yellow-600"
-                                    : "bg-green-600"
-                                }`}
-                                style={{
-                                  width: `${Math.min(alert.percentage, 100)}%`,
-                                }}
-                              />
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {alert.percentage.toFixed(1)}% of budget used
-                            </div>
+                          <div>
+                            <label className="text-sm font-medium">Amount ($)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={newLimitAmount}
+                              onChange={(e) => setNewLimitAmount(e.target.value)}
+                              required
+                            />
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                        <div className="flex gap-2">
+                          <Button type="submit" size="sm">
+                            <Settings className="h-4 w-4 mr-2" />
+                            Set Limit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowSetLimit(false)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </div>
+          )}
 
-                {/* Create Alert Form */}
-                {showCreateAlert && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-6"
-                  >
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Create Cost Alert</CardTitle>
-                        <CardDescription>
-                          Get notified when spending exceeds thresholds
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <form
-                          onSubmit={handleCreateAlert}
-                          className="space-y-4"
-                        >
+          {activeTab === "alerts" && (
+            <div className="space-y-6">
+              {/* Create Alert Form */}
+              {showCreateAlert && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Create Cost Alert</CardTitle>
+                      <CardDescription>
+                        Get notified when spending exceeds thresholds
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleCreateAlert} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div>
+                            <label className="text-sm font-medium">Alert Name</label>
                             <Input
-                              placeholder="Alert name"
                               value={newAlertName}
                               onChange={(e) => setNewAlertName(e.target.value)}
                               required
                             />
                           </div>
                           <div>
+                            <label className="text-sm font-medium">Period</label>
+                            <Select value={newAlertPeriod} onValueChange={setNewAlertPeriod}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="monthly">Monthly</SelectItem>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="hourly">Hourly</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Threshold ($)</label>
                             <Input
                               type="number"
                               step="0.01"
-                              placeholder="Threshold amount ($)"
                               value={newAlertThreshold}
-                              onChange={(e) =>
-                                setNewAlertThreshold(e.target.value)
-                              }
+                              onChange={(e) => setNewAlertThreshold(e.target.value)}
                               required
                             />
                           </div>
-                          <div className="flex gap-2">
-                            <Button type="submit" size="sm">
-                              <Plus className="h-4 w-4 mr-2" />
-                              Create Alert
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowCreateAlert(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </form>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )}
-              </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button type="submit" size="sm">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Alert
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowCreateAlert(false)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
 
-              {/* Budget Summary */}
-              <div className="lg:col-span-1">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Budget Summary</CardTitle>
-                    <CardDescription>Monthly budget overview</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-blue-600">
-                          $50.00
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Monthly Budget
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Used:</span>
-                          <span className="font-medium">$42.60</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Remaining:
-                          </span>
-                          <span className="font-medium text-green-600">
-                            $7.40
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-3">
-                          <div
-                            className="bg-blue-600 h-3 rounded-full"
-                            style={{ width: "85.2%" }}
-                          />
-                        </div>
-                        <div className="text-xs text-center text-muted-foreground">
-                          85.2% of budget used
-                        </div>
-                      </div>
+              {/* Usage vs Limits Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Usage vs Limits</CardTitle>
+                  <CardDescription>Current usage compared to spending limits</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Monthly Usage</span>
+                      <span className="text-sm text-muted-foreground">
+                        ${totalCurrentCost.toFixed(2)} / ${monthlyLimit.toFixed(2)}
+                      </span>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className={`h-3 rounded-full ${
+                          usagePercentage > 80 ? 'bg-red-600' : usagePercentage > 60 ? 'bg-yellow-600' : 'bg-green-600'
+                        }`}
+                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-center text-muted-foreground">
+                      {usagePercentage.toFixed(1)}% of monthly limit used
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>
